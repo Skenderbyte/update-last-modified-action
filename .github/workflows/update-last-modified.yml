@@ -1,0 +1,61 @@
+name: Update Last Modified
+
+on:
+  push:
+    paths:
+      - '**.md'
+
+jobs:
+  update-metadata:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+
+    permissions:
+      contents: write
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Get metadata
+        id: metadata
+        run: |
+          USER="${{ github.actor }}"
+
+          case "$USER" in
+            skenderbyte) DISPLAY_NAME="Egzon Zeneli" ;;
+            dummyuser001) DISPLAY_NAME="John Doe" ;;
+            dummyuser002) DISPLAY_NAME="John Not Doe" ;;
+            *) DISPLAY_NAME="$USER" ;;
+          esac
+
+          echo "USER=$DISPLAY_NAME" >> $GITHUB_OUTPUT
+          echo "TIMESTAMP=$(TZ='Europe/Amsterdam' date '+%d-%m-%Y %H:%M:%S')" >> $GITHUB_OUTPUT
+
+      - name: Update markdown files
+        run: |
+          USER="${{ steps.metadata.outputs.USER }}"
+          TIMESTAMP="${{ steps.metadata.outputs.TIMESTAMP }}"
+
+          CHANGED_FILES=$(git diff --name-only ${{ github.event.before }} ${{ github.sha }} -- '*.md')
+
+          for file in $CHANGED_FILES
+          do
+            if [ -f "$file" ] && grep -q "LAST_MODIFIED_START" "$file"; then
+              perl -0pi -e "s|<!-- LAST_MODIFIED_START -->.*?<!-- LAST_MODIFIED_END -->|<!-- LAST_MODIFIED_START -->\n${TIMESTAMP} door ${USER}\n<!-- LAST_MODIFIED_END -->|gs" "$file"
+            fi
+          done
+
+      - name: Commit changes
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+          git add .
+
+          if ! git diff --staged --quiet; then
+            git commit -m "Update last modified information"
+            git push
+          fi
