@@ -1,4 +1,4 @@
-name: Update Last Modified
+name: update-last-modified
 
 on:
   push:
